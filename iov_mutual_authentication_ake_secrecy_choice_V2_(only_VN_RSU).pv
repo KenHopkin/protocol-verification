@@ -1,0 +1,266 @@
+
+
+free c: channel.
+(* free SecureChannel: channel [private]. *)
+
+type host.
+type nonce.
+type pkey.
+type skey.
+type spkey.
+type sskey.
+type key.
+
+
+
+type G.
+type exponent.
+type symkey.
+type CHskey.
+type coins.
+
+
+
+fun nonce_to_bitstring(nonce): bitstring [data,typeConverter].
+fun G_to_nonce(G): nonce [data,typeConverter].
+fun CHskey_to_exponent(CHskey): exponent [data,typeConverter].
+fun coins_to_bitstring(coins): bitstring [data,typeConverter].
+fun host_to_bitstring(host): bitstring [data,typeConverter].
+fun symkey_to_bitstring(symkey): bitstring [data,typeConverter].
+fun bitstring_to_symkey(bitstring): symkey [data,typeConverter].
+fun bitstring_to_coins(bitstring): coins [data,typeConverter].
+fun bitstring_to_nonce(bitstring): nonce [data,typeConverter].
+fun coins_to_symkey(coins): symkey [data,typeConverter].
+
+
+(* Diffie-Hellman *)
+
+const g: G [data].
+fun exp(G, exponent): G.
+fun A_VN(coins, G, CHskey): G.
+fun m_VN(G, CHskey, CHskey, coins, bitstring, host, bitstring): G.
+fun CH(G, G, coins, host, bitstring): G.
+
+equation 
+	forall k: CHskey, x: CHskey, other: coins, pID: bitstring, hostX: host, hostY: host, Timestamp:bitstring; CH(m_VN(g,k,x,other, pID, hostY, Timestamp), A_VN(other,g,x), other, hostY, Timestamp)=exp(g,CHskey_to_exponent(k)) [convergent].
+
+
+
+
+
+
+
+(* Shared key encryption *)
+
+fun sencrypt(bitstring,symkey): bitstring.
+reduc forall x: bitstring, y: symkey; sdecrypt(sencrypt(x,y),y) = x.
+
+(* Hash function *)
+
+fun h0(nonce): symkey.
+fun h1(nonce, nonce): symkey.
+fun h2(G, symkey, coins, bitstring): symkey.
+fun h3(symkey, symkey, bitstring): symkey.
+fun h4(bitstring, symkey, bitstring, symkey, symkey, symkey, bitstring): symkey.
+fun h5(nonce, nonce, symkey, bitstring): symkey.
+fun h6(symkey, symkey, bitstring, bitstring): bitstring.
+
+fun h7(symkey): key.
+
+
+
+(* Secrecy assumptions *)
+
+
+not attacker(new k).
+not attacker(new x).
+not attacker(new GK).
+not attacker(new b).
+not attacker(new PD).
+
+free VN: host.
+free RSM, RSU: host.
+
+(* the table host names/keys 
+   The key table consists of chameleon hash(host, G) *)
+table keys(host, G).
+
+
+
+
+set ignoreTypes = false.
+
+
+(* Role of the processInitiator_VN with identity xVN and secret CH key xk, xx *)
+let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
+	new other: coins;
+	new T1: bitstring;
+	new random: key;
+
+	(* The [host] can be understood as the [uid] sent by the base station actively. Generally, the base station will send it actively. *)
+	(* xVN is equal to xpID, but it is split out here for convenience *)
+
+	in(c, (xVN: host, hostX: host));
+	if xVN = VN then
+	let xk = k in 
+	let xx = x in
+	let xD = D in 
+	let xpID = pID in
+	let M = h2(exp(g, CHskey_to_exponent(xk)), xD, other, T1) in
+	
+
+	(* Message 1 *)
+	let message1 = (m_VN(g,xk,xx,other,xpID,hostX, T1), A_VN(other,g,xx), sencrypt(coins_to_bitstring(other),xD), xpID, T1) in
+	
+	
+
+	out(c, message1);
+
+	
+	
+	(* Message 2 *)
+	in(c, message2:bitstring)[precise];
+	
+	
+
+	let(s2':bitstring, s3':bitstring, T2:bitstring) = message2 in
+	let (beta_RSU': symkey, pID': bitstring, D': symkey) = sdecrypt(s2', M) in
+	(* let D' = bitstring_to_symkey(string_D') in 
+	let string_beta_RSU' = sdecrypt(s3, M) in
+	let beta_RSU' = bitstring_to_symkey(string_beta_RSU') in*)
+	let Ks = h3(beta_RSU', M, T2) in
+	if s3' = symkey_to_bitstring(h4(s2', beta_RSU', pID', D', M, Ks, T2)) then
+
+
+
+	let message3 = h6(M, Ks, message1, message2) in
+
+
+	(* Message 3 *)
+	out(c, message3);
+	
+	
+	if xVN = VN then
+	(
+		out(c, (choice[h7(coins_to_symkey(other)), random], choice[h7(xD),random], choice[h7(M),random], choice[h7(Ks),random], choice[h7(bitstring_to_symkey(pID')),random], choice[h7(D'),random], choice[h7(bitstring_to_symkey(message1)),random], choice[h7(bitstring_to_symkey(message2)),random], choice[h7(bitstring_to_symkey(message3)),random]))
+	)
+	else 
+	(
+		out(c, (h7(coins_to_symkey(other)), h7(xD), h7(M), h7(Ks), h7(bitstring_to_symkey(pID')), h7(D'), h7(bitstring_to_symkey(message1)), h7(bitstring_to_symkey(message2)), h7(bitstring_to_symkey(message3))))
+	).
+
+
+
+
+
+
+
+
+(* Role of the responder_RSU with identity xRSU *)
+let processResponder_RSU(b: symkey, GK: nonce) = 
+	in(c, xRSU: host);
+	new beta_RSU: symkey;
+	new T2: bitstring;
+	new PD': nonce;
+	new random: key;
+
+	(* Message 1 *)
+	in(c, message1: bitstring)[precise];
+	let (m_VN_value:G , A_VN_value: G, senc_other: bitstring, xpID: bitstring, T1:bitstring) = message1 in
+
+	
+	if xRSU = RSU then
+
+
+
+
+
+	let xb = b in
+	let xGK = GK in
+	
+
+	
+
+
+	(* let (m_VN_value:G , A_VN_value: G, senc_other: bitstring, xpID: bitstring) = m2 in *)
+	let xD = h5(bitstring_to_nonce(sdecrypt(xpID, xb)), xGK, xb, xpID) in
+
+
+	let (xother:coins) = bitstring_to_coins(sdecrypt(senc_other, xD)) in
+	let hostY = VN in 
+	get keys(=hostY, CHvalue) in 
+	if CHvalue = CH(m_VN_value, A_VN_value, xother, RSU, T1) then
+
+	
+	let pID' = sencrypt(nonce_to_bitstring(PD'), xb) in
+	let D' = h5(PD',xGK, xb, xpID) in
+	let M = h2(CH(m_VN_value, A_VN_value, xother, RSU, T1), xD, xother, T1) in
+
+
+
+	
+	if xRSU = RSU then
+
+	
+
+	let Ks = h3(beta_RSU, M, T2) in 
+	let s2 = sencrypt((beta_RSU, pID', D'), M) in
+	let s3 = symkey_to_bitstring(h4(s2, beta_RSU, pID', D', M, Ks, T2)) in
+
+	
+	let message2 = (s2, s3, T2) in
+
+
+
+
+	(* Message 2 *)
+	out(c, message2);
+
+
+	(* Message 3 *)
+	in(c, message3:bitstring);
+	if message3 = h6(M, Ks, message1, message2) then
+	
+
+	if xRSU = RSU then
+	(
+		out(c, (choice[h7(beta_RSU), random], choice[h7(xD),random], choice[h7(M),random], choice[h7(Ks),random], choice[h7(bitstring_to_symkey(pID')),random], choice[h7(D'),random]))
+	)
+	else 
+	(
+		out(c, (h7(beta_RSU), h7(xD), h7(M), h7(Ks), h7(bitstring_to_symkey(pID')), h7(D')))
+	).
+
+	
+
+
+
+
+
+
+(* Key registration *)
+let processK =
+	in(c, (h: host, k: G));
+	if h <> VN then insert keys(h,k).
+
+
+
+
+(* Start process *)
+process 
+	new k: CHskey; insert keys(VN, exp(g, CHskey_to_exponent(k)));
+	new x: CHskey;
+	new GK: nonce;
+	new b: symkey;
+	new PD: nonce;
+	let pID = sencrypt(nonce_to_bitstring(PD), b) in
+	let D = h5(PD, GK, b, pID) in
+
+	(
+	  (* Launch an unbounded number of sessions of the initiator *)
+	  (!processInitiator_VN(k, x, D, pID)) | 
+	  (* Launch an unbounded number of sessions of the responder *)
+	  (!processResponder_RSU(b, GK)) |
+	  (* Key registration process *)
+	  ((!processK))
+	)
