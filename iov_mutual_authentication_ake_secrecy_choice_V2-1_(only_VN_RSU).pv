@@ -63,6 +63,7 @@ fun h3(symkey, symkey, bitstring): symkey.
 fun h4(bitstring, symkey, bitstring, symkey, symkey, symkey, bitstring): symkey.
 fun h5(nonce, nonce, symkey, bitstring): symkey.
 fun h6(symkey, symkey, bitstring, bitstring): bitstring.
+fun h7(symkey): symkey.
 
 
 
@@ -83,74 +84,6 @@ free RSM, RSU: host.
 table keys(host, G).
 
 
-
-(* Authentication Queries *)
-
-(*
-fun messVNTerm(host, host): bitstring [data].
-fun messRSUTerm(host, host): bitstring [data].
-*)
-
-event VNTerm(host, host, symkey, bitstring).
-event VNAcRSU(host, host, symkey, bitstring).
-event RSUAcVN(host, host, symkey, bitstring).
-event RSUTerm(host, host, symkey, bitstring).
-
-query x: host, m: bitstring, Ks: symkey; 
-      inj-event(VNTerm(x,RSU,Ks,m)) ==> inj-event(RSUAcVN(x,RSU,Ks,m)).
-query x: host, m: bitstring, Ks: symkey; 
-      inj-event(RSUTerm(VN,x,Ks,m)) ==> inj-event(VNAcRSU(VN,x,Ks,m)).
-
-query x: host, m: bitstring, Ks: symkey, Ks': symkey;
-	event(RSUTerm(VN,x,Ks,m)) && event(VNAcRSU(VN,x,Ks',m)) ==> Ks = Ks'.
-
-query x: host, m: bitstring, Ks: symkey, Ks': symkey;
-	event(VNTerm(x,RSU,Ks,m)) && event(RSUAcVN(x,RSU,Ks',m)) ==> Ks = Ks'.
-
-(* Query for detecting bilateral UKS attacks *)
-query x: host, y:host, x':host, y':host, k:symkey, k':symkey, 
-	m: bitstring, m':bitstring; 
-	event(RSUTerm(x,y,k,m)) && event(VNAcRSU(x',y',k,m')) ==> x = x' && y = y'.
-
-query x: host, y:host, x':host, y':host, k:symkey, k':symkey, 
-	m: bitstring, m':bitstring; 
-	event(VNTerm(x,y,k,m)) && event(RSUAcVN(x',y',k,m')) ==> x = x' && y = y'.
-
-
-(* Secrecy queries *)
-free secretVN_M, secretVN_beta, secretRSU_M, secretRSU_beta, secretVN_Ks, secretRSU_Ks, secretVN_D, secretRSU_D, secretVN_D', secretRSU_D', secretRSU_pID', secretVN_pID', secretVN_alpha: bitstring [private].
-
-query attacker(secretVN_M);
-      attacker(secretVN_beta);
-      attacker(secretVN_Ks);
-	  attacker(secretVN_D);
-	  attacker(secretVN_D');
-	  attacker(secretVN_pID');
-	  attacker(secretVN_alpha);
-
-      attacker(secretRSU_M);
-      attacker(secretRSU_beta);
-      attacker(secretRSU_Ks);
-	  attacker(secretRSU_D);
-	  attacker(secretRSU_D');
-	  attacker(secretRSU_pID').
-
-
-(* Order Queries *)
-(* event end5(host, host, CHskey, CHskey, symkey, coins, symkey, symkey, symkey, symkey, bitstring, bitstring, bitstring). *)
-event endmessage(host, host, symkey, G, G, bitstring, symkey, symkey, bitstring, bitstring).
-event e3(host, host, CHskey, CHskey, symkey, symkey, symkey, symkey, symkey, symkey, bitstring, bitstring, bitstring, bitstring).
-event e2(host, host, symkey, G, G, bitstring, symkey, symkey, bitstring, bitstring).
-event e1(host, host, CHskey, CHskey, symkey, symkey, G, G, bitstring, bitstring).
-
-query eVN: host, eRSU:host, eRSM:host, xk: CHskey, xx: CHskey, xD:symkey, D':symkey, beta_VN: symkey, beta_RSU: symkey, M: symkey, Ks: symkey, s2: bitstring, s3: bitstring, pID: bitstring, T1:bitstring, T2: bitstring, xGK: nonce, xb: symkey, PD': nonce, m_VN_value: G, A_VN_value: G, senc_beta_VN: bitstring; 
-      (*inj-event(end5(eVN, eRSU, xk, xx, xD, beta_VN, D', beta_RSU, M, Ks, s2, s3, s4)) ==> *)
-      (inj-event(endmessage(eVN, eRSU, beta_RSU, m_VN_value, A_VN_value, senc_beta_VN, M, Ks, s2, s3)) ==>
-      (inj-event(e3(eVN, eRSU, xk, xx, xD, beta_VN, D', beta_RSU, M, Ks, s2, s3, pID, T2)) ==>
-      (inj-event(e2(eVN, eRSU, beta_RSU, m_VN_value, A_VN_value, senc_beta_VN, M, Ks, s2, s3)) ==>
-       inj-event(e1(eVN, eRSU, xk, xx, xD, beta_VN, m_VN_value, A_VN_value, senc_beta_VN, T1))))).
-
-
 set ignoreTypes = false.
 
 
@@ -160,6 +93,7 @@ let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
 	new T1: bitstring;
 	new alpha: symkey;
 	new beta_VN: symkey;
+    new random: symkey;
 	(* The [host] can be understood as the [uid] sent by the base station actively. Generally, the base station will send it actively. *)
 	(* xVN is equal to xpID, but it is split out here for convenience *)
 
@@ -175,9 +109,7 @@ let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
 	(* Message 1 *)
 	let message1 = (m_VN(g,xk,xx,xpID, alpha, beta_VN, hostX, T1), A_VN(alpha,g,xx), sencrypt(symkey_to_bitstring(beta_VN),xD), xpID, T1) in
 	
-	(* Order queries *)
-	event e1(xVN, hostX, xk, xx, xD, beta_VN, m_VN(g,xk,xx,xpID, alpha, beta_VN,hostX, T1), A_VN(alpha,g,xx), sencrypt(symkey_to_bitstring(beta_VN),xD), T1);
-
+	
 	out(c, message1);
 
 	
@@ -195,15 +127,11 @@ let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
 	let Ks = h3(beta_RSU', M, T2) in
 	if s3' = symkey_to_bitstring(h4(s2', beta_RSU', pID', D', M, Ks, T2)) then
 
-	(* events *)
-	event VNTerm(xVN, hostX, Ks, (message1, message2));
-	(* events *)
-	event VNAcRSU(xVN, hostX, Ks, (message1, message2));
+	
 
 	let message3 = h6(M, Ks, message1, message2) in
 
-	(* Order queries *)
-	event e3(xVN, hostX, xk, xx, xD, beta_VN, D', beta_RSU', M, Ks, s2', s3', pID', T2);
+	
 
 
 	(* Message 3 *)
@@ -211,18 +139,17 @@ let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
 
 	
 
-	(* Secrecy queries *)
-	out(c, sencrypt(secretVN_beta,beta_VN));
-	out(c, sencrypt(secretVN_M,M));
-	out(c, sencrypt(secretVN_Ks, Ks));
-	out(c, sencrypt(secretVN_D, xD));
-	out(c, sencrypt(secretVN_D', D'));
-	out(c, sencrypt(secretVN_pID', bitstring_to_symkey(pID')));
-	out(c, sencrypt(secretVN_alpha, alpha)).
+	if xVN = VN then
+	(
+		out(c, (choice[h7(beta_VN), random], choice[h7(beta_RSU'), random], choice[h7(xD),random], choice[h7(M),random], choice[h7(Ks),random], choice[h7(bitstring_to_symkey(pID')),random], choice[h7(D'),random], choice[h7(bitstring_to_symkey(message1)),random], choice[h7(bitstring_to_symkey(message2)),random], choice[h7(bitstring_to_symkey(message3)),random]))
+	)
+	else 
+	(
+		out(c, (h7(beta_VN), h7(beta_RSU'), h7(xD), h7(M), h7(Ks), h7(bitstring_to_symkey(pID')), h7(D'), h7(bitstring_to_symkey(message1)), h7(bitstring_to_symkey(message2)), h7(bitstring_to_symkey(message3))))
+	).
 
 
-	(* Order queries *)
-	(* event end5(xVN, hostX, xk, xx, xD, other, D', beta_RSU', M, Ks, s2, s3, s4). *)
+
 
 
 
@@ -232,6 +159,7 @@ let processResponder_RSU(b: symkey, GK: nonce) =
 	in(c, xRSU: host);
 	new beta_RSU: symkey;
 	new T2: bitstring;
+    new random: symkey;
 
 	(* Message 1 *)
 	in(c, message1: bitstring)[precise];
@@ -281,12 +209,6 @@ let processResponder_RSU(b: symkey, GK: nonce) =
 	let message2 = (s2, s3, T2) in
 
 
-	(* events *)
-	event RSUAcVN(hostY, xRSU, Ks, (message1));
-
-
-	(* Order queries *)
-	event e2(hostY, xRSU, beta_RSU, m_VN_value, A_VN_value, senc_beta_VN, M, Ks, s2, s3);
 
 	(* Message 2 *)
 	out(c, message2);
@@ -296,19 +218,14 @@ let processResponder_RSU(b: symkey, GK: nonce) =
 	in(c, message3:bitstring);
 	if message3 = h6(M, Ks, message1, message2) then
 
-	(* events *)
-	event RSUTerm(hostY, xRSU, Ks, (message1,message2,message3));
-
-	(* Secrecy queries *)
-	out(c, sencrypt(secretRSU_beta, beta_RSU));
-	out(c, sencrypt(secretRSU_M, M));
-	out(c, sencrypt(secretRSU_Ks, Ks));
-	out(c, sencrypt(secretRSU_D, xD));
-	out(c, sencrypt(secretRSU_D', D'));
-	out(c, sencrypt(secretRSU_pID', bitstring_to_symkey(pID')));
-
-	(* Order queries *)
-	event endmessage(hostY, xRSU, beta_RSU, m_VN_value, A_VN_value, senc_beta_VN, M, Ks, s2, s3).
+    if xRSU = RSU then
+	(
+		out(c, (choice[h7(beta_VN'), random], choice[h7(beta_RSU), random], choice[h7(xD),random], choice[h7(M),random], choice[h7(Ks),random], choice[h7(bitstring_to_symkey(pID')),random], choice[h7(D'),random]))
+	)
+	else 
+	(
+		out(c, (h7(beta_VN'), h7(beta_RSU), h7(xD), h7(M), h7(Ks), h7(bitstring_to_symkey(pID')), h7(D')))
+	).
 	
 
 
