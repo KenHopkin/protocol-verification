@@ -118,18 +118,20 @@ query x: host, y:host, x':host, y':host, k:symkey, k':symkey,
 
 
 (* Secrecy queries *)
-free secretVN_M, secretVN_beta, secretRSU_M, secretRSU_beta, secretVN_Ks, secretRSU_Ks, secretVN_D, secretRSU_D, secretVN_D', secretRSU_D': bitstring [private].
+free secretVN_M, secretVN_beta, secretRSU_M, secretRSU_beta, secretVN_Ks, secretRSU_Ks, secretVN_D, secretRSU_D, secretVN_D', secretRSU_D', secretRSU_pID', secretVN_pID': bitstring [private].
 
 query attacker(secretVN_M);
       attacker(secretVN_beta);
       attacker(secretVN_Ks);
 	  attacker(secretVN_D);
 	  attacker(secretVN_D');
+	  attacker(secretVN_pID');
       attacker(secretRSU_M);
       attacker(secretRSU_beta);
       attacker(secretRSU_Ks);
 	  attacker(secretRSU_D);
-	  attacker(secretRSU_D').
+	  attacker(secretRSU_D');
+	  attacker(secretRSU_pID').
 
 
 (* Order Queries *)
@@ -210,7 +212,9 @@ let processInitiator_VN(k: CHskey, x: CHskey, D: symkey, pID: bitstring) =
 	out(c, sencrypt(secretVN_M,M));
 	out(c, sencrypt(secretVN_Ks, Ks));
 	out(c, sencrypt(secretVN_D, xD));
-	out(c, sencrypt(secretVN_D', D')).
+	out(c, sencrypt(secretVN_D', D'));
+	out(c, sencrypt(secretVN_pID', bitstring_to_symkey(pID'))).
+
 
 	(* Order queries *)
 	(* event end5(xVN, hostX, xk, xx, xD, other, D', beta_RSU', M, Ks, s2, s3, s4). *)
@@ -302,6 +306,7 @@ let processResponder_RSU(b: symkey, GK: nonce) =
 	out(c, sencrypt(secretRSU_Ks, Ks));
 	out(c, sencrypt(secretRSU_D, xD));
 	out(c, sencrypt(secretRSU_D', D'));
+	out(c, sencrypt(secretRSU_pID', bitstring_to_symkey(pID')));
 
 	(* Order queries *)
 	event endmessage(hostY, xRSU, beta_RSU, m_VN_value, A_VN_value, senc_other, M, Ks, s2, s3).
